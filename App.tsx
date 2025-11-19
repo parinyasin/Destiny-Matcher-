@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import { 
   Radar, 
   RadarChart, 
@@ -33,6 +34,12 @@ const StarIcon = ({ filled }: { filled: boolean }) => (
 const ShareIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
     <path fillRule="evenodd" d="M15.75 4.5a3 3 0 11.825 2.066l-8.421 4.679a3.002 3.002 0 010 1.51l8.421 4.679a3 3 0 11-.729 1.31l-8.421-4.678a3 3 0 110-4.132l8.421-4.679a3 3 0 01-.096-.755z" clipRule="evenodd" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
+    <path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v11.69l3.22-3.22a.75.75 0 111.06 1.06l-4.5 4.5a.75.75 0 01-1.06 0l-4.5-4.5a.75.75 0 111.06-1.06l3.22 3.22V3a.75.75 0 01.75-.75zm-9 13.5a.75.75 0 01.75.75v2.25a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5V16.5a.75.75 0 011.5 0v2.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V16.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
   </svg>
 );
 
@@ -87,6 +94,9 @@ function App() {
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const resultRef = useRef<HTMLDivElement>(null);
 
   const calculateCompatibility = () => {
     if (mySignId === "" || partnerSignId === "") return;
@@ -174,9 +184,36 @@ function App() {
     }
   };
 
+  const handleSaveImage = async () => {
+    if (!resultRef.current) return;
+    setIsSaving(true);
+    try {
+      // Force dark background matching the theme for the image capture
+      const canvas = await html2canvas(resultRef.current, {
+        scale: 2, // Better quality
+        backgroundColor: '#1e1b4b', // indigo-950
+        useCORS: true,
+        logging: false
+      });
+      
+      const image = canvas.toDataURL("image/png");
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `destiny-matcher-${Date.now()}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Error saving image:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Helper to determine styling based on score
   const isHighScore = result ? result.stars >= 4 : false;
   const isLowScore = result ? result.stars <= 2 : false;
+  
+  const mySignName = result ? ZODIAC_SIGNS.find(z => z.id === Number(mySignId))?.name : '';
+  const partnerSignName = result ? ZODIAC_SIGNS.find(z => z.id === Number(partnerSignId))?.name : '';
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black text-white font-sans selection:bg-pink-500 selection:text-white pb-20 relative">
@@ -316,8 +353,9 @@ function App() {
             
             {/* Score Card */}
             <section 
+              ref={resultRef}
               className={`
-                relative overflow-hidden backdrop-blur-xl rounded-3xl shadow-2xl transition-all duration-500
+                relative overflow-hidden backdrop-blur-xl rounded-3xl shadow-2xl transition-all duration-500 p-8 md:p-10 text-center
                 ${isHighScore ? 'bg-gradient-to-br from-indigo-900/60 to-purple-900/60 border border-yellow-400/50 shadow-[0_0_30px_rgba(250,204,21,0.2)]' : ''}
                 ${isLowScore ? 'bg-gradient-to-br from-red-950/60 to-gray-900/60 border border-red-500/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]' : ''}
                 ${!isHighScore && !isLowScore ? 'bg-gradient-to-br from-white/10 to-white/5 border border-white/20' : ''}
@@ -335,8 +373,14 @@ function App() {
                 ${!isHighScore && !isLowScore ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500' : ''}
               `}></div>
               
-              <div className="p-8 md:p-10 text-center relative z-1">
-                <h2 className="text-gray-300 text-lg mb-2 uppercase tracking-widest font-medium">คะแนนรวมของคุณ</h2>
+              <div className="relative z-1">
+                <div className="flex flex-col items-center justify-center mb-6">
+                   <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 drop-shadow-md">
+                     {mySignName} <span className="text-pink-500 mx-2">❤️</span> {partnerSignName}
+                   </h3>
+                   <h2 className="text-indigo-200 text-sm uppercase tracking-widest font-medium">คะแนนรวมของคุณ</h2>
+                </div>
+
                 <div className="flex items-end justify-center mb-6">
                   <span 
                     className={`text-7xl md:text-8xl font-bold leading-none drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]
@@ -356,17 +400,21 @@ function App() {
                 </div>
 
                 <div className={`
-                  rounded-2xl p-6 md:p-8 border relative overflow-hidden
+                  rounded-2xl p-6 md:p-8 border relative overflow-hidden text-left
                   ${isHighScore ? 'bg-yellow-500/10 border-yellow-500/20' : ''}
                   ${isLowScore ? 'bg-red-500/10 border-red-500/20' : ''}
                   ${!isHighScore && !isLowScore ? 'bg-white/5 border-white/5' : ''}
                 `}>
-                   <div className="absolute top-0 left-0 p-4 opacity-10">
+                   <div className="absolute top-0 left-0 p-4 opacity-10 pointer-events-none">
                       <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M14.017 21L14.017 18C14.017 16.8954 13.1216 16 12.017 16H7.19921C6.09464 16 5.19921 16.8954 5.19921 18V21H14.017ZM16.017 21H19.017C20.1216 21 21.017 20.1046 21.017 19V11.475C21.017 10.7186 20.6263 10.0139 19.9869 9.61833L13.9869 5.90722C12.7727 5.1562 11.2618 5.1562 10.0476 5.90722L4.04762 9.61833C3.4082 10.0139 3.01746 10.7186 3.01746 11.475V19C3.01746 20.1046 3.91289 21 5.01746 21H6.01746C7.12203 21 8.01746 20.1046 8.01746 19V18C8.01746 17.4477 8.46517 17 9.01746 17H12.0175C12.5697 17 13.0175 17.4477 13.0175 18V19C13.0175 20.1046 13.9129 21 15.0175 21H16.017V21ZM9.01746 12C9.01746 13.1046 9.91289 14 11.0175 14H13.0175C14.122 14 15.0175 13.1046 15.0175 12V9.5C15.0175 9.22386 14.7936 9 14.5175 9H9.51746C9.24132 9 9.01746 9.22386 9.01746 9.5V12Z" /></svg>
                    </div>
-                   <p className="text-lg md:text-xl leading-relaxed text-indigo-100 italic">
+                   <p className="text-lg md:text-xl leading-relaxed text-indigo-100 italic text-center relative z-10">
                      "{result.predictionText}"
                    </p>
+                </div>
+
+                <div className="mt-6 text-center opacity-50 text-[10px] uppercase tracking-[0.3em] text-indigo-200">
+                  Destiny Matcher by การะเกต์พยากรณ์
                 </div>
               </div>
             </section>
@@ -472,15 +520,38 @@ function App() {
             </div>
 
             {/* Share and Reset Actions */}
-            <div className="flex flex-col items-center gap-4 pb-10">
+            <div className="flex flex-col md:flex-row items-center justify-center gap-4 pb-10">
               <button 
                 onClick={handleShare}
-                className="flex items-center px-8 py-3 bg-green-600 hover:bg-green-500 text-white rounded-full font-bold transition-all transform hover:scale-105 shadow-lg"
+                className="w-full md:w-auto flex items-center justify-center px-8 py-3 bg-green-600 hover:bg-green-500 text-white rounded-full font-bold transition-all transform hover:scale-105 shadow-lg"
               >
                 <ShareIcon />
-                แชร์ผลคำทำนาย
+                แชร์ผลคำทำนาย (ข้อความ)
               </button>
 
+              <button 
+                onClick={handleSaveImage}
+                disabled={isSaving}
+                className={`w-full md:w-auto flex items-center justify-center px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-bold transition-all transform hover:scale-105 shadow-lg ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                {isSaving ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    กำลังสร้างรูปภาพ...
+                  </span>
+                ) : (
+                  <>
+                    <DownloadIcon />
+                    บันทึกรูปภาพ
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <div className="flex justify-center pb-10 -mt-6">
                <button 
                  onClick={() => {
                    setMySignId("");
